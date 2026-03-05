@@ -9,42 +9,46 @@
 
 body.theme-dark {
   color-scheme: dark;
-  --bg-a: #060b17;
-  --bg-b: #0a1730;
-  --bg-c: #07152a;
+  --bg-a: #07132a;
+  --bg-b: #0a1b35;
+  --bg-c: #0d2141;
   --surface: rgba(15, 28, 54, 0.7);
   --surface-2: rgba(10, 21, 40, 0.88);
   --surface-3: rgba(18, 36, 72, 0.62);
   --text: #ecf3ff;
   --muted: #9fb3d6;
-  --line: rgba(153, 196, 255, 0.22);
-  --accent: #38d5ff;
-  --accent-2: #3ff0b8;
+  --line: rgba(124, 180, 255, 0.3);
+  --accent: #10c3ff;
+  --accent-2: #2ce089;
   --danger: #ff5f85;
   --danger-ink: #ff86a3;
   --shadow-soft: 0 12px 30px rgba(0, 6, 16, 0.48);
   --shadow-hard: 0 24px 60px rgba(0, 4, 14, 0.66);
   --field-bg: rgba(8, 17, 34, 0.82);
+  --table-line: rgba(113, 170, 247, 0.38);
+  --button-ghost-bg: #112a52;
 }
 
 body.theme-light {
   color-scheme: light;
-  --bg-a: #eaf2ff;
-  --bg-b: #dce8fa;
-  --bg-c: #f6f9ff;
+  --bg-a: #edf4ff;
+  --bg-b: #e0ecff;
+  --bg-c: #f7fbff;
   --surface: rgba(255, 255, 255, 0.66);
   --surface-2: rgba(248, 251, 255, 0.88);
   --surface-3: rgba(239, 246, 255, 0.9);
   --text: #1c2940;
   --muted: #566784;
-  --line: rgba(164, 184, 217, 0.62);
-  --accent: #009ed1;
-  --accent-2: #00b88e;
+  --line: rgba(130, 156, 203, 0.72);
+  --accent: #008bd1;
+  --accent-2: #00a56a;
   --danger: #da3f63;
   --danger-ink: #c33356;
   --shadow-soft: 0 10px 26px rgba(169, 188, 218, 0.46);
   --shadow-hard: 0 22px 54px rgba(177, 196, 226, 0.62);
   --field-bg: rgba(248, 251, 255, 0.95);
+  --table-line: rgba(130, 156, 203, 0.58);
+  --button-ghost-bg: #e6f0ff;
 }
 
 * {
@@ -60,10 +64,7 @@ body {
   margin: 0;
   color: var(--text);
   font-family: "Manrope", "Segoe UI", sans-serif;
-  background:
-    radial-gradient(1200px 620px at 95% -8%, rgba(62, 130, 255, 0.2), transparent 60%),
-    radial-gradient(900px 560px at -8% 105%, rgba(62, 232, 186, 0.16), transparent 56%),
-    linear-gradient(158deg, var(--bg-a), var(--bg-b) 56%, var(--bg-c));
+  background-color: var(--bg-a);
   transition: color var(--transition-med), background var(--transition-med);
   overflow-x: hidden;
 }
@@ -93,16 +94,18 @@ body::before {
 body::after {
   content: "";
   position: fixed;
-  inset: auto -12% -18% -12%;
-  height: 72vh;
+  left: -12%;
+  right: -12%;
+  bottom: -24px;
+  height: 220px;
   pointer-events: none;
   z-index: 0;
-  background:
-    radial-gradient(120% 100% at 0% 100%, transparent 64%, color-mix(in srgb, var(--accent) 20%, transparent) 64.5%, transparent 65%),
-    radial-gradient(120% 100% at 18% 100%, transparent 68%, color-mix(in srgb, var(--accent) 18%, transparent) 68.5%, transparent 69%),
-    radial-gradient(120% 100% at 38% 100%, transparent 72%, color-mix(in srgb, var(--accent-2) 20%, transparent) 72.5%, transparent 73%),
-    radial-gradient(120% 100% at 58% 100%, transparent 76%, color-mix(in srgb, var(--accent) 17%, transparent) 76.5%, transparent 77%),
-    radial-gradient(120% 100% at 78% 100%, transparent 80%, color-mix(in srgb, var(--accent-2) 16%, transparent) 80.5%, transparent 81%);
+  border-top: 2px solid color-mix(in srgb, var(--accent) 42%, transparent);
+  border-radius: 52% 48% 0 0 / 100% 100% 0 0;
+  box-shadow:
+    0 -34px 0 0 color-mix(in srgb, var(--accent-2) 28%, transparent),
+    0 -68px 0 0 color-mix(in srgb, var(--accent) 22%, transparent),
+    0 -102px 0 0 color-mix(in srgb, var(--accent-2) 18%, transparent);
   opacity: 0.42;
   animation: waveShift 16s ease-in-out infinite;
 }
@@ -161,37 +164,18 @@ body.modal-open {
   overflow: hidden;
   border-radius: calc(var(--radius-xl) + 4px);
   border: 1px solid color-mix(in srgb, var(--line) 90%, transparent);
-  background: linear-gradient(
-    145deg,
-    color-mix(in srgb, var(--surface-3) 92%, transparent),
-    color-mix(in srgb, var(--surface-2) 94%, transparent)
-  );
+  background: color-mix(in srgb, var(--surface-3) 88%, #0d2242);
   box-shadow: var(--shadow-hard);
   padding: 24px 28px;
   margin-bottom: 22px;
 }
 
 .hero-shell::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(120deg, transparent 20%, rgba(255, 255, 255, 0.08) 48%, transparent 78%);
-  transform: translateX(-120%);
-  animation: sheen 8s linear infinite;
-  pointer-events: none;
+  content: none;
 }
 
 .hero-shell::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  border: 1px solid transparent;
-  background: linear-gradient(110deg, rgba(59, 214, 255, 0.24), rgba(71, 242, 187, 0.18), transparent) border-box;
-  -webkit-mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
+  content: none;
 }
 
 .hero-simple {
@@ -220,7 +204,7 @@ body.modal-open {
 .control-card {
   border-radius: var(--radius-xl);
   border: 1px solid color-mix(in srgb, var(--line) 92%, transparent);
-  background: linear-gradient(145deg, color-mix(in srgb, var(--surface) 94%, transparent), color-mix(in srgb, var(--surface-2) 96%, transparent));
+  background: color-mix(in srgb, var(--surface-2) 92%, #0c1f3e);
   box-shadow: var(--shadow-soft);
   padding: 24px;
   backdrop-filter: blur(14px);
@@ -356,13 +340,14 @@ select:focus {
 }
 
 .btn.primary {
-  background: linear-gradient(140deg, var(--accent), color-mix(in srgb, var(--accent-2) 50%, #96fff8));
+  background: var(--accent);
   color: #04273a;
   box-shadow: 0 12px 24px color-mix(in srgb, var(--accent) 24%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 80%, #052a40);
 }
 
 .btn.ghost {
-  background: color-mix(in srgb, var(--surface-2) 92%, transparent);
+  background: var(--button-ghost-bg);
   border-color: color-mix(in srgb, var(--line) 92%, transparent);
   color: var(--text);
   box-shadow: 0 6px 14px color-mix(in srgb, #000 16%, transparent);
@@ -412,8 +397,8 @@ select:focus {
 }
 
 .switch input[type="checkbox"]:checked {
-  border-color: transparent;
-  background: linear-gradient(140deg, var(--accent), var(--accent-2));
+  border-color: color-mix(in srgb, var(--accent) 72%, #0b2d47);
+  background: var(--accent);
 }
 
 .switch input[type="checkbox"]:checked::after {
@@ -493,7 +478,7 @@ select:focus {
   font-weight: 700;
   font-family: "Sora", "Segoe UI", sans-serif;
   border-bottom: 1px solid color-mix(in srgb, var(--line) 86%, transparent);
-  background: linear-gradient(100deg, color-mix(in srgb, var(--accent) 18%, transparent), color-mix(in srgb, var(--accent-2) 14%, transparent));
+  background: color-mix(in srgb, var(--accent) 20%, var(--surface-2));
 }
 
 .table-wrap {
@@ -503,15 +488,44 @@ select:focus {
 table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
+  border: 1px solid var(--table-line);
+}
+
+th:nth-child(1),
+td:nth-child(1) {
+  width: 76px;
+}
+
+th:nth-child(2),
+td:nth-child(2) {
+  width: 44%;
+}
+
+th:nth-child(3),
+td:nth-child(3) {
+  width: 14%;
+}
+
+th:nth-child(4),
+td:nth-child(4) {
+  width: 24%;
+}
+
+th:nth-child(5),
+td:nth-child(5) {
+  width: 96px;
 }
 
 th,
 td {
-  padding: 12px 14px;
-  border-bottom: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
-  text-align: left;
-  vertical-align: top;
+  padding: 14px 12px;
+  border-right: 1px solid var(--table-line);
+  border-bottom: 1px solid var(--table-line);
+  text-align: center;
+  vertical-align: middle;
   font-size: 14px;
+  line-height: 1.25;
 }
 
 th {
@@ -526,8 +540,35 @@ th {
   z-index: 2;
 }
 
+th:last-child,
+td:last-child {
+  border-right: 0;
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+tbody tr:nth-child(odd) {
+  background: color-mix(in srgb, var(--surface-2) 94%, transparent);
+}
+
+tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+}
+
+tbody tr:hover td {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface-2));
+}
+
 td strong {
   font-weight: 700;
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
 }
 
 .file-check {
@@ -542,8 +583,8 @@ td strong {
 }
 
 .file-check:checked {
-  border-color: transparent;
-  background: linear-gradient(150deg, var(--accent), var(--accent-2));
+  border-color: color-mix(in srgb, var(--accent) 75%, #0b2d47);
+  background: var(--accent);
 }
 
 .file-check:checked::after {
@@ -612,9 +653,8 @@ td strong {
 .skeleton-line {
   border-radius: 999px;
   height: 13px;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--muted) 30%, transparent), transparent);
-  background-size: 260% 100%;
-  animation: shimmer 1.35s linear infinite;
+  background: color-mix(in srgb, var(--muted) 30%, transparent);
+  animation: pulseDot 1.35s linear infinite;
 }
 
 .skeleton-line + .skeleton-line {
@@ -683,7 +723,7 @@ td strong {
   width: min(90vw, 520px);
   border-radius: 18px;
   border: 1px solid color-mix(in srgb, var(--line) 92%, transparent);
-  background: linear-gradient(145deg, color-mix(in srgb, var(--surface-2) 96%, transparent), color-mix(in srgb, var(--surface) 82%, transparent));
+  background: color-mix(in srgb, var(--surface-2) 96%, #0b1f3f);
   box-shadow: var(--shadow-hard);
   padding: 22px;
   animation: modalIn var(--transition-fast) both;
