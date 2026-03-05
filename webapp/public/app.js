@@ -60,6 +60,7 @@ const els = {
   modalBackdrop: document.getElementById("modalBackdrop"),
   modalTitle: document.getElementById("modalTitle"),
   modalMessage: document.getElementById("modalMessage"),
+  modalSecondaryBtn: document.getElementById("modalSecondaryBtn"),
   modalCancelBtn: document.getElementById("modalCancelBtn"),
   modalConfirmBtn: document.getElementById("modalConfirmBtn"),
 };
@@ -311,20 +312,36 @@ function openModal(options = {}) {
     confirmText = "Confirm",
     cancelText = "Cancel",
     hideCancel = false,
+    secondaryText = "",
+    hideSecondary = true,
     tone = "primary",
   } = options;
 
   els.modalTitle.textContent = title;
   els.modalMessage.textContent = message;
   els.modalConfirmBtn.textContent = confirmText;
+  els.modalSecondaryBtn.textContent = secondaryText || "More";
   els.modalCancelBtn.textContent = cancelText;
+  els.modalSecondaryBtn.classList.toggle(
+    "hidden",
+    hideSecondary || !String(secondaryText || "").trim()
+  );
   els.modalCancelBtn.classList.toggle("hidden", hideCancel);
 
   els.modalConfirmBtn.classList.remove("primary", "danger", "ghost");
-  els.modalConfirmBtn.classList.add(tone === "danger" ? "danger" : "primary");
+  if (tone === "danger") {
+    els.modalConfirmBtn.classList.add("danger");
+  } else if (tone === "ghost") {
+    els.modalConfirmBtn.classList.add("ghost");
+  } else {
+    els.modalConfirmBtn.classList.add("primary");
+  }
 
   els.modalBackdrop.classList.remove("hidden");
   els.modalBackdrop.setAttribute("aria-hidden", "false");
+  els.modalBackdrop.classList.remove("modal-enter");
+  void els.modalBackdrop.offsetWidth;
+  els.modalBackdrop.classList.add("modal-enter");
   document.body.classList.add("modal-open");
 
   return new Promise((resolve) => {
@@ -335,16 +352,17 @@ function openModal(options = {}) {
 function closeModal(result) {
   const resolver = state.ui.modalResolver;
   state.ui.modalResolver = null;
+  els.modalBackdrop.classList.remove("modal-enter");
   els.modalBackdrop.classList.add("hidden");
   els.modalBackdrop.setAttribute("aria-hidden", "true");
   document.body.classList.remove("modal-open");
   if (typeof resolver === "function") {
-    resolver(Boolean(result));
+    resolver(result || "cancel");
   }
 }
 
 async function confirmDialog(title, message, options = {}) {
-  return openModal({
+  const result = await openModal({
     title,
     message,
     confirmText: options.confirmText || "Confirm",
@@ -352,6 +370,7 @@ async function confirmDialog(title, message, options = {}) {
     tone: options.tone || "primary",
     hideCancel: false,
   });
+  return result === "confirm";
 }
 
 async function alertDialog(title, message) {
@@ -708,6 +727,58 @@ function getCheckedFilePaths() {
   return [...checks].map((check) => decodeURIComponent(check.dataset.path));
 }
 
+async function checkOutputConflict(filePath, destination) {
+  return api("/api/check-output", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      inputPath: filePath,
+      destinationMode: destination.destinationMode,
+      destinationDir: destination.destinationDir,
+      outputFormat: destination.outputFormat,
+    }),
+  });
+}
+
+async function openPathAction(action, targetPath) {
+  if (!targetPath) return;
+  await api("/api/open-path", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action,
+      targetPath,
+    }),
+  });
+}
+
+async function showOutputActionsModal(options = {}) {
+  const {
+    title = "Export Ready",
+    message = "Your file is ready.",
+    outputPath = "",
+    tone = "primary",
+  } = options;
+
+  const modalResult = await openModal({
+    title,
+    message,
+    confirmText: "Open Folder",
+    secondaryText: "Locate File",
+    cancelText: "Close",
+    hideSecondary: false,
+    tone,
+  });
+
+  if (modalResult === "confirm") {
+    await openPathAction("open_folder", outputPath);
+    return;
+  }
+  if (modalResult === "secondary") {
+    await openPathAction("reveal_file", outputPath);
+  }
+}
+
 async function fixSingleFile(filePath) {
   await ensureSettingsSavedIfDirty();
   const destination = getManualDestinationPayload();
@@ -721,7 +792,29 @@ async function fixSingleFile(filePath) {
   );
   if (!accepted) return;
 
-  await api("/api/fix", {
+  const outputCheck = await checkOutputConflict(filePath, destination);
+  if (outputCheck.exists) {
+    const duplicateDecision = await openModal({
+      title: "File Already Exists",
+      message:
+        "A fixed file with this name already exists in the destination folder. You can locate it now or continue.",
+      confirmText: "Continue Fix",
+      secondaryText: "Locate Existing File",
+      cancelText: "Cancel",
+      hideSecondary: false,
+      tone: "danger",
+    });
+
+    if (duplicateDecision === "secondary") {
+      await openPathAction("reveal_file", outputCheck.outputPath);
+      return;
+    }
+    if (duplicateDecision !== "confirm") {
+      return;
+    }
+  }
+
+  const result = await api("/api/fix", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -732,7 +825,24 @@ async function fixSingleFile(filePath) {
     }),
   });
 
+  if (result.skipped) {
+    showToast(`Existing output kept for ${shortName}.`, "info", 4800);
+    await showOutputActionsModal({
+      title: "File Already Exists",
+      message: `${shortName} is already available in the selected folder. You can open the folder or locate the file.`,
+      outputPath: result.outputPath,
+      tone: "ghost",
+    });
+    return;
+  }
+
   showToast(`Fixed ${shortName} as ${formatText}`, "success");
+  await showOutputActionsModal({
+    title: "Export Successful",
+    message: `${shortName} was exported successfully. Open the folder or locate the file now.`,
+    outputPath: result.outputPath,
+    tone: "primary",
+  });
 }
 
 async function fixSelectedFiles() {
@@ -769,6 +879,19 @@ async function fixSelectedFiles() {
     result.failCount > 0 ? "error" : "success",
     4800
   );
+
+  if (result.successCount > 0) {
+    const firstSuccess = (result.results || []).find((item) => item && item.ok && item.outputPath);
+    if (firstSuccess?.outputPath) {
+      await showOutputActionsModal({
+        title: "Batch Export Complete",
+        message:
+          "The selected files were processed. You can open the destination folder or locate one exported file.",
+        outputPath: firstSuccess.outputPath,
+        tone: "primary",
+      });
+    }
+  }
 }
 
 function wireRowActions() {
@@ -800,18 +923,19 @@ function wireLoadMoreButtons() {
 }
 
 function wireModalEvents() {
-  els.modalConfirmBtn.addEventListener("click", () => closeModal(true));
-  els.modalCancelBtn.addEventListener("click", () => closeModal(false));
+  els.modalConfirmBtn.addEventListener("click", () => closeModal("confirm"));
+  els.modalSecondaryBtn.addEventListener("click", () => closeModal("secondary"));
+  els.modalCancelBtn.addEventListener("click", () => closeModal("cancel"));
 
   els.modalBackdrop.addEventListener("click", (event) => {
     if (event.target === els.modalBackdrop) {
-      closeModal(false);
+      closeModal("cancel");
     }
   });
 
   document.addEventListener("keydown", (event) => {
     if (state.ui.modalResolver && event.key === "Escape") {
-      closeModal(false);
+      closeModal("cancel");
     }
   });
 }

@@ -671,7 +671,7 @@ async function convertWithFfmpeg(inputPath, outputPath, formatKey) {
   await runExecFile(binary, args, 20 * 60 * 1000);
 }
 
-async function convertEncryptedVideo(inputPath, outputDir, outputFormat = "mp4") {
+function resolveOutputTarget(inputPath, outputDir, outputFormat = "mp4") {
   const source = normalizeAbsoluteFile(inputPath);
   const targetDir = normalizeAbsoluteDir(outputDir);
   const formatKey = normalizeOutputFormat(outputFormat);
@@ -687,6 +687,24 @@ async function convertEncryptedVideo(inputPath, outputDir, outputFormat = "mp4")
     throw new Error("Only FonePaw encrypted video files (.key*) are supported.");
   }
 
+  const baseName = path.basename(source, path.extname(source));
+  const outputPath = path.join(targetDir, `${baseName}${profile.ext}`);
+
+  return {
+    source,
+    targetDir,
+    formatKey,
+    outputPath,
+  };
+}
+
+async function convertEncryptedVideo(inputPath, outputDir, outputFormat = "mp4") {
+  const { source, targetDir, formatKey, outputPath } = resolveOutputTarget(
+    inputPath,
+    outputDir,
+    outputFormat
+  );
+
   const inputStat = await fsp.stat(source);
   if (!inputStat.isFile()) {
     throw new Error("Input path is not a file.");
@@ -699,15 +717,16 @@ async function convertEncryptedVideo(inputPath, outputDir, outputFormat = "mp4")
 
   await fsp.mkdir(targetDir, { recursive: true });
 
-  const baseName = path.basename(source, path.extname(source));
-  const outputPath = path.join(targetDir, `${baseName}${profile.ext}`);
+  let existedBefore = false;
 
   try {
     const existing = await fsp.stat(outputPath);
+    existedBefore = existing.isFile() && existing.size > 0;
     if (existing.isFile() && existing.size > 0 && existing.mtimeMs >= inputStat.mtimeMs) {
       return {
         outputPath,
         skipped: true,
+        existedBefore: true,
         outputFormat: formatKey,
       };
     }
@@ -743,6 +762,7 @@ async function convertEncryptedVideo(inputPath, outputDir, outputFormat = "mp4")
   return {
     outputPath,
     skipped: false,
+    existedBefore,
     outputFormat: formatKey,
   };
 }
@@ -758,6 +778,45 @@ function resolveDestinationDir(destinationMode, destinationDir) {
     throw new Error("For custom destination, provide an absolute output folder.");
   }
   return normalized;
+}
+
+async function openPathInExplorer(action, targetPath) {
+  const normalized = normalizeAbsoluteFile(targetPath) || normalizeAbsoluteDir(targetPath);
+  if (!normalized) {
+    throw new Error("targetPath must be an absolute path.");
+  }
+
+  let stat = null;
+  try {
+    stat = await fsp.stat(normalized);
+  } catch {
+    throw new Error("Target path does not exist.");
+  }
+
+  if (action === "reveal_file") {
+    if (!stat.isFile()) {
+      throw new Error("Reveal action requires a file path.");
+    }
+    await runExecFile("explorer.exe", [`/select,${normalized}`], 15000);
+    return;
+  }
+
+  if (action === "open_folder") {
+    const folder = stat.isDirectory() ? normalized : path.dirname(normalized);
+    await runExecFile("explorer.exe", [folder], 15000);
+    return;
+  }
+
+  if (action === "open_file") {
+    if (!stat.isFile()) {
+      throw new Error("Open file action requires a file path.");
+    }
+    const script = `Start-Process -FilePath ${toPowerShellSingleQuoted(normalized)}`;
+    await runPowerShell(script, 15000, { windowsHide: false });
+    return;
+  }
+
+  throw new Error("Unsupported action.");
 }
 
 async function runWatcherScan(trigger = "manual") {
@@ -1121,6 +1180,95 @@ app.post("/api/settings", (req, res) => {
   }
 });
 
+app.post("/api/check-output", async (req, res) => {
+  try {
+    const body = req.body || {};
+    const inputPath = normalizeAbsoluteFile(body.inputPath);
+    if (!inputPath) {
+      return res.status(400).json({
+        ok: false,
+        error: "inputPath must be an absolute file path.",
+      });
+    }
+
+    const destinationMode =
+      body.destinationMode === "custom" || body.destinationMode === "downloads"
+        ? body.destinationMode
+        : config.outputMode;
+    const destinationDir = resolveDestinationDir(
+      destinationMode,
+      body.destinationDir || config.outputDir
+    );
+    const outputFormat = normalizeOutputFormat(body.outputFormat || config.outputFormat);
+    const target = resolveOutputTarget(inputPath, destinationDir, outputFormat);
+
+    let inputStat = null;
+    let outputStat = null;
+
+    try {
+      inputStat = await fsp.stat(target.source);
+    } catch {
+      return res.status(400).json({
+        ok: false,
+        error: "Input file does not exist.",
+      });
+    }
+
+    try {
+      outputStat = await fsp.stat(target.outputPath);
+    } catch {
+      outputStat = null;
+    }
+
+    const exists = Boolean(outputStat && outputStat.isFile() && outputStat.size > 0);
+    const skipLikely = Boolean(
+      exists && inputStat && outputStat.mtimeMs >= inputStat.mtimeMs
+    );
+
+    return res.json({
+      ok: true,
+      exists,
+      skipLikely,
+      outputPath: target.outputPath,
+      destinationDir,
+      outputFormat: target.formatKey,
+      outputMtimeIso: outputStat ? new Date(outputStat.mtimeMs).toISOString() : "",
+      outputSize: outputStat ? outputStat.size : 0,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: error.message,
+    });
+  }
+});
+
+app.post("/api/open-path", async (req, res) => {
+  try {
+    const body = req.body || {};
+    const action = String(body.action || "").trim().toLowerCase();
+    const targetPath = String(body.targetPath || "").trim();
+    if (!targetPath) {
+      return res.status(400).json({
+        ok: false,
+        error: "targetPath is required.",
+      });
+    }
+
+    await openPathInExplorer(action, targetPath);
+    return res.json({
+      ok: true,
+      action,
+      targetPath,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      error: error.message,
+    });
+  }
+});
+
 app.post("/api/fix", async (req, res) => {
   try {
     const body = req.body || {};
@@ -1157,6 +1305,7 @@ app.post("/api/fix", async (req, res) => {
 
     return res.json({
       ok: true,
+      destinationDir,
       ...result,
     });
   } catch (error) {
@@ -1262,6 +1411,8 @@ app.post("/api/fix-batch", async (req, res) => {
 
   return res.json({
     ok: true,
+    destinationDir,
+    outputFormat,
     successCount,
     failCount,
     results,
