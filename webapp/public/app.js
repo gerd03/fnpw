@@ -1,4 +1,14 @@
 const GROUP_PAGE_SIZE = 14;
+const CLOUD_PREVIEW_HOST_SUFFIX = ".vercel.app";
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+const CLIENT_DEFAULT_CONFIG = {
+  sourceDir: "",
+  outputMode: "downloads",
+  outputFormat: "mp4",
+  outputDir: "",
+  pollSeconds: 5,
+  autoStartWatcher: false,
+};
 
 const state = {
   config: null,
@@ -11,6 +21,7 @@ const state = {
     theme: "dark",
     modalResolver: null,
     loadingFiles: false,
+    cloudPreview: false,
     groupRenderCount: {
       today: GROUP_PAGE_SIZE,
       yesterday: GROUP_PAGE_SIZE,
@@ -179,7 +190,68 @@ function setFilesLoading(loading) {
   }
 }
 
+function isCloudPreviewHost() {
+  const host = String(window.location.hostname || "").toLowerCase();
+  if (!host) return false;
+  if (LOCAL_HOSTS.has(host)) return false;
+  return host.endsWith(CLOUD_PREVIEW_HOST_SUFFIX);
+}
+
+function enableCloudPreviewMode() {
+  state.ui.cloudPreview = true;
+  state.config = { ...CLIENT_DEFAULT_CONFIG };
+  applyConfigToForm({ force: true });
+  resetGroupRenderCounts();
+  state.files = [];
+  state.grouped = { today: [], yesterday: [], earlier: [] };
+  renderGroups();
+
+  const disabledControls = [
+    els.sourceDir,
+    els.sourceBrowseBtn,
+    els.discoverBtn,
+    els.sourceSelect,
+    els.outputMode,
+    els.outputFormat,
+    els.outputDir,
+    els.outputBrowseBtn,
+    els.pollSeconds,
+    els.autoStartWatcher,
+    els.saveSettingsBtn,
+    els.manualDestinationMode,
+    els.manualOutputFormat,
+    els.manualDestinationDir,
+    els.manualDestinationBrowseBtn,
+    els.refreshFilesBtn,
+    els.fixSelectedBtn,
+    els.selectAll,
+  ];
+
+  for (const control of disabledControls) {
+    if (control) {
+      control.disabled = true;
+    }
+  }
+
+  els.fileGroups.innerHTML = `
+    <section class="file-empty reveal in-view">
+      <h3>Cloud Preview Mode</h3>
+      <p>
+        This Vercel deployment is UI-only. Run this app on your Windows PC with
+        <code>npm run dev</code> to enable fixing, folder browse, and local file scanning.
+      </p>
+    </section>
+  `;
+  els.fileCount.textContent = "0 visible / 0 total";
+  setStatusText("Cloud preview mode on Vercel. Local Windows runtime is required for tools.");
+}
+
 async function api(url, options = {}) {
+  if (state.ui.cloudPreview) {
+    throw new Error(
+      "Cloud preview mode: API is unavailable on Vercel. Run locally on Windows for full features."
+    );
+  }
   const response = await fetch(url, options);
   const json = await response.json();
   if (!response.ok || json.ok === false) {
@@ -891,6 +963,11 @@ async function init() {
   wireModalEvents();
   wireEvents();
   observeRevealNodes();
+
+  if (isCloudPreviewHost()) {
+    enableCloudPreviewMode();
+    return;
+  }
 
   try {
     await Promise.all([

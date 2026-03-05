@@ -1,0 +1,24 @@
+{
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/webapp/public/index.html"
+    },
+    {
+      "source": "/app.js",
+      "destination": "/webapp/public/app.js"
+    },
+    {
+      "source": "/styles.css",
+      "destination": "/webapp/public/styles.css"
+    },
+    {
+      "source": "/favicon.svg",
+      "destination": "/webapp/public/favicon.svg"
+    },
+    {
+      "source": "/:path*",
+      "destination": "/webapp/public/:path*"
+    }
+  ]
+}
