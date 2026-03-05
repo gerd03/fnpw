@@ -228,6 +228,74 @@ body.modal-open {
   min-height: 680px;
 }
 
+.cloud-studio {
+  margin-top: 6px;
+}
+
+.cloud-mode .cloud-studio {
+  min-height: 0;
+}
+
+.cloud-hint {
+  margin: -2px 0 0;
+  line-height: 1.55;
+}
+
+.cloud-table-wrap {
+  margin-top: 14px;
+}
+
+.cloud-table-wrap th:nth-child(1),
+.cloud-table-wrap td:nth-child(1) {
+  width: 72px;
+}
+
+.cloud-table-wrap th:nth-child(2),
+.cloud-table-wrap td:nth-child(2) {
+  width: 32%;
+}
+
+.cloud-table-wrap th:nth-child(3),
+.cloud-table-wrap td:nth-child(3) {
+  width: 12%;
+}
+
+.cloud-table-wrap th:nth-child(4),
+.cloud-table-wrap td:nth-child(4) {
+  width: 24%;
+}
+
+.cloud-table-wrap th:nth-child(5),
+.cloud-table-wrap td:nth-child(5) {
+  width: 12%;
+}
+
+.cloud-table-wrap th:nth-child(6),
+.cloud-table-wrap td:nth-child(6) {
+  width: 170px;
+}
+
+.cloud-row-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cloud-row-actions .btn {
+  min-width: 92px;
+}
+
+.cloud-ready {
+  color: var(--accent-2);
+  font-weight: 700;
+}
+
+.cloud-error {
+  color: var(--danger-ink);
+  font-weight: 700;
+}
+
 .card-head {
   display: flex;
   align-items: center;
@@ -512,28 +580,28 @@ table {
   border: 1px solid var(--table-line);
 }
 
-th:nth-child(1),
-td:nth-child(1) {
+.group-card th:nth-child(1),
+.group-card td:nth-child(1) {
   width: 76px;
 }
 
-th:nth-child(2),
-td:nth-child(2) {
+.group-card th:nth-child(2),
+.group-card td:nth-child(2) {
   width: 44%;
 }
 
-th:nth-child(3),
-td:nth-child(3) {
+.group-card th:nth-child(3),
+.group-card td:nth-child(3) {
   width: 14%;
 }
 
-th:nth-child(4),
-td:nth-child(4) {
+.group-card th:nth-child(4),
+.group-card td:nth-child(4) {
   width: 24%;
 }
 
-th:nth-child(5),
-td:nth-child(5) {
+.group-card th:nth-child(5),
+.group-card td:nth-child(5) {
   width: 96px;
 }
 
@@ -560,24 +628,24 @@ th {
   z-index: 2;
 }
 
-th:last-child,
-td:last-child {
+.group-card th:last-child,
+.group-card td:last-child {
   border-right: 0;
 }
 
-tbody tr:last-child td {
+.group-card tbody tr:last-child td {
   border-bottom: 0;
 }
 
-tbody tr:nth-child(odd) {
+.group-card tbody tr:nth-child(odd) {
   background: color-mix(in srgb, var(--surface-2) 94%, transparent);
 }
 
-tbody tr:nth-child(even) {
+.group-card tbody tr:nth-child(even) {
   background: color-mix(in srgb, var(--surface) 88%, transparent);
 }
 
-tbody tr:hover td {
+.group-card tbody tr:hover td {
   background: color-mix(in srgb, var(--accent) 14%, var(--surface-2));
 }
 
@@ -1016,8 +1084,8 @@ td strong {
     width: 100%;
   }
 
-  th:nth-child(4),
-  td:nth-child(4) {
+  .group-card th:nth-child(4),
+  .group-card td:nth-child(4) {
     display: none;
   }
 }
@@ -1059,6 +1127,14 @@ td strong {
   }
 
   .modal-actions .btn {
+    width: 100%;
+  }
+
+  .cloud-row-actions {
+    flex-direction: column;
+  }
+
+  .cloud-row-actions .btn {
     width: 100%;
   }
 }

@@ -15,6 +15,8 @@ const state = {
   files: [],
   grouped: { today: [], yesterday: [], earlier: [] },
   supportedOutputFormats: ["mp4", "mov", "mkv", "wmv", "webm", "f4v", "mpegts", "gif"],
+  cloudQueue: [],
+  cloudNextId: 1,
   ui: {
     settingsDirty: false,
     manualDestinationTouched: false,
@@ -33,6 +35,8 @@ const state = {
 
 const els = {
   themeToggle: document.getElementById("themeToggle"),
+  workspaceGrid: document.getElementById("workspaceGrid"),
+  cloudStudio: document.getElementById("cloudStudio"),
   sourceDir: document.getElementById("sourceDir"),
   sourceBrowseBtn: document.getElementById("sourceBrowseBtn"),
   discoverBtn: document.getElementById("discoverBtn"),
@@ -63,6 +67,13 @@ const els = {
   modalSecondaryBtn: document.getElementById("modalSecondaryBtn"),
   modalCancelBtn: document.getElementById("modalCancelBtn"),
   modalConfirmBtn: document.getElementById("modalConfirmBtn"),
+  cloudFileInput: document.getElementById("cloudFileInput"),
+  cloudPickBtn: document.getElementById("cloudPickBtn"),
+  cloudFixSelectedBtn: document.getElementById("cloudFixSelectedBtn"),
+  cloudClearBtn: document.getElementById("cloudClearBtn"),
+  cloudAutoDownload: document.getElementById("cloudAutoDownload"),
+  cloudQueueBody: document.getElementById("cloudQueueBody"),
+  cloudCount: document.getElementById("cloudCount"),
 };
 
 function escapeHtml(input) {
@@ -198,59 +209,484 @@ function isCloudPreviewHost() {
   return host.endsWith(CLOUD_PREVIEW_HOST_SUFFIX);
 }
 
-function enableCloudPreviewMode() {
-  state.ui.cloudPreview = true;
-  state.config = { ...CLIENT_DEFAULT_CONFIG };
-  applyConfigToForm({ force: true });
-  resetGroupRenderCounts();
-  state.files = [];
-  state.grouped = { today: [], yesterday: [], earlier: [] };
-  renderGroups();
+function encryptedOutputExtensionForFileName(fileName) {
+  const raw = String(fileName || "");
+  const dotIndex = raw.lastIndexOf(".");
+  if (dotIndex < 0) return ".mp4";
 
-  const disabledControls = [
-    els.sourceDir,
-    els.sourceBrowseBtn,
-    els.discoverBtn,
-    els.sourceSelect,
-    els.outputMode,
-    els.outputFormat,
-    els.outputDir,
-    els.outputBrowseBtn,
-    els.pollSeconds,
-    els.autoStartWatcher,
-    els.saveSettingsBtn,
-    els.manualDestinationMode,
-    els.manualOutputFormat,
-    els.manualDestinationDir,
-    els.manualDestinationBrowseBtn,
-    els.refreshFilesBtn,
-    els.fixSelectedBtn,
-    els.selectAll,
-  ];
+  const ext = raw.slice(dotIndex + 1).toLowerCase();
+  if (!ext.startsWith("key")) {
+    return `.${ext || "mp4"}`;
+  }
 
-  for (const control of disabledControls) {
-    if (control) {
-      control.disabled = true;
+  const decoded = ext.slice(3);
+  if (!decoded) return ".mp4";
+  if (decoded === "mpegts" || decoded === "mpeg-ts" || decoded === "ts") return ".ts";
+  return `.${decoded}`;
+}
+
+function deriveCloudOutputName(fileName) {
+  const raw = String(fileName || "").trim() || "output";
+  const dotIndex = raw.lastIndexOf(".");
+  const baseName = dotIndex > 0 ? raw.slice(0, dotIndex) : raw;
+  const outExt = encryptedOutputExtensionForFileName(raw);
+  return `${baseName}${outExt}`;
+}
+
+function mimeTypeForExtension(ext) {
+  const key = String(ext || "").toLowerCase();
+  switch (key) {
+    case ".mp4":
+      return "video/mp4";
+    case ".mov":
+      return "video/quicktime";
+    case ".mkv":
+      return "video/x-matroska";
+    case ".wmv":
+      return "video/x-ms-wmv";
+    case ".webm":
+      return "video/webm";
+    case ".f4v":
+      return "video/x-f4v";
+    case ".ts":
+      return "video/mp2t";
+    case ".gif":
+      return "image/gif";
+    default:
+      return "application/octet-stream";
+  }
+}
+
+function isCloudFixableFile(file) {
+  if (!file || !file.name) return false;
+  const dotIndex = file.name.lastIndexOf(".");
+  if (dotIndex < 0) return false;
+  const ext = file.name.slice(dotIndex + 1).toLowerCase();
+  return ext.startsWith("key");
+}
+
+function clearCloudObjectUrls() {
+  for (const item of state.cloudQueue) {
+    if (item.blobUrl) {
+      URL.revokeObjectURL(item.blobUrl);
+      item.blobUrl = "";
+    }
+  }
+}
+
+function cloudStatusLabel(item) {
+  if (item.status === "ready") return "Ready";
+  if (item.status === "processing") return "Processing...";
+  if (item.status === "error") return "Failed";
+  return "Queued";
+}
+
+function renderCloudQueue() {
+  const total = state.cloudQueue.length;
+  if (els.cloudCount) {
+    els.cloudCount.textContent = `${total} file(s)`;
+  }
+  if (!els.cloudQueueBody) return;
+
+  if (total === 0) {
+    els.cloudQueueBody.innerHTML = `
+      <tr>
+        <td colspan="6" class="status-label">No uploaded files yet.</td>
+      </tr>
+    `;
+    return;
+  }
+
+  els.cloudQueueBody.innerHTML = state.cloudQueue
+    .map((item) => {
+      const statusClass = item.status === "error" ? "cloud-error" : item.status === "ready" ? "cloud-ready" : "";
+      const disabledFix = item.status === "processing" ? "disabled" : "";
+      const disabledDownload = item.status === "ready" ? "" : "disabled";
+      return `
+        <tr>
+          <td>
+            <input
+              type="checkbox"
+              class="file-check cloud-check"
+              data-id="${item.id}"
+              ${item.selected ? "checked" : ""}
+              ${item.status === "processing" ? "disabled" : ""}
+            />
+          </td>
+          <td><strong title="${escapeHtml(item.file.name)}">${escapeHtml(displayFileName(item.file.name))}</strong></td>
+          <td>${formatBytes(item.file.size)}</td>
+          <td title="${escapeHtml(item.outputName)}">${escapeHtml(item.outputName)}</td>
+          <td class="${statusClass}">${escapeHtml(cloudStatusLabel(item))}</td>
+          <td>
+            <div class="cloud-row-actions">
+              <button type="button" class="btn ghost cloud-fix-one" data-id="${item.id}" ${disabledFix}>Fix</button>
+              <button type="button" class="btn ghost cloud-download-one" data-id="${item.id}" ${disabledDownload}>Download</button>
+            </div>
+          </td>
+        </tr>
+      `;
+    })
+    .join("");
+}
+
+function queueCloudFiles(fileList) {
+  const incoming = [...(fileList || [])];
+  if (incoming.length === 0) return;
+
+  const existingKeys = new Set(
+    state.cloudQueue.map((item) => `${item.file.name}|${item.file.size}|${item.file.lastModified}`)
+  );
+
+  let added = 0;
+  let ignored = 0;
+  for (const file of incoming) {
+    const key = `${file.name}|${file.size}|${file.lastModified}`;
+    if (existingKeys.has(key) || !isCloudFixableFile(file)) {
+      ignored += 1;
+      continue;
+    }
+    existingKeys.add(key);
+    state.cloudQueue.push({
+      id: state.cloudNextId++,
+      file,
+      outputExt: encryptedOutputExtensionForFileName(file.name),
+      outputName: deriveCloudOutputName(file.name),
+      status: "queued",
+      selected: true,
+      outputBlob: null,
+      blobUrl: "",
+      error: "",
+    });
+    added += 1;
+  }
+
+  renderCloudQueue();
+  if (added > 0) {
+    showToast(`Uploaded ${added} file(s) to cloud queue.`, "success");
+  }
+  if (ignored > 0) {
+    showToast(`${ignored} file(s) were skipped (duplicate or unsupported).`, "info", 4600);
+  }
+}
+
+async function decodeCloudItemToBlob(item) {
+  const buffer = await item.file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  const headerLen = Math.min(48, bytes.length);
+  for (let i = 0; i < headerLen; i += 1) {
+    bytes[i] = bytes[i] ^ 0xcd;
+  }
+  return new Blob([bytes], { type: mimeTypeForExtension(item.outputExt) });
+}
+
+function ensureCloudBlobUrl(item) {
+  if (!item.outputBlob) {
+    throw new Error("File is not fixed yet.");
+  }
+  if (!item.blobUrl) {
+    item.blobUrl = URL.createObjectURL(item.outputBlob);
+  }
+  return item.blobUrl;
+}
+
+function triggerBrowserDownload(blobUrl, fileName) {
+  const link = document.createElement("a");
+  link.href = blobUrl;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+async function saveBlobWithPicker(blob, fileName) {
+  if (typeof window.showSaveFilePicker !== "function") {
+    return false;
+  }
+
+  const extension = fileName.includes(".") ? `.${fileName.split(".").pop()}` : ".mp4";
+  const handle = await window.showSaveFilePicker({
+    suggestedName: fileName,
+    types: [
+      {
+        description: "Video Export",
+        accept: {
+          [mimeTypeForExtension(extension)]: [extension],
+        },
+      },
+    ],
+  });
+  const writable = await handle.createWritable();
+  await writable.write(blob);
+  await writable.close();
+  return true;
+}
+
+function getCloudSelectedIds() {
+  return state.cloudQueue.filter((item) => item.selected).map((item) => item.id);
+}
+
+function getCloudItemById(id) {
+  return state.cloudQueue.find((item) => item.id === id) || null;
+}
+
+async function handleCloudSuccessAction(item) {
+  const autoDownload = Boolean(els.cloudAutoDownload?.checked);
+  if (autoDownload) {
+    triggerBrowserDownload(ensureCloudBlobUrl(item), item.outputName);
+    showToast(`Downloaded ${displayFileName(item.outputName)}.`, "success");
+    return;
+  }
+
+  const action = await openModal({
+    title: "Export Successful",
+    message: `${displayFileName(item.outputName)} is ready. Choose what you want to do next.`,
+    confirmText: "Download",
+    secondaryText: "Save As",
+    cancelText: "Later",
+    hideSecondary: false,
+  });
+
+  if (action === "confirm") {
+    triggerBrowserDownload(ensureCloudBlobUrl(item), item.outputName);
+    return;
+  }
+  if (action === "secondary") {
+    try {
+      const saved = await saveBlobWithPicker(item.outputBlob, item.outputName);
+      if (saved) {
+        showToast(`Saved ${displayFileName(item.outputName)}.`, "success");
+        return;
+      }
+    } catch (error) {
+      if (error && error.name !== "AbortError") {
+        showToast(error.message || "Save As failed. Falling back to download.", "error", 5200);
+      }
+    }
+    triggerBrowserDownload(ensureCloudBlobUrl(item), item.outputName);
+  }
+}
+
+async function fixCloudItemById(id, options = {}) {
+  const showSuccessModal = options.showSuccessModal !== false;
+  const item = getCloudItemById(id);
+  if (!item || item.status === "processing") return false;
+
+  const existingReady = state.cloudQueue.find(
+    (other) =>
+      other.id !== item.id &&
+      other.status === "ready" &&
+      other.outputName.toLowerCase() === item.outputName.toLowerCase()
+  );
+
+  if (existingReady) {
+    const duplicateAction = await openModal({
+      title: "Output Already Exists",
+      message:
+        "This output name is already fixed in your queue. Download existing file or continue re-fixing.",
+      confirmText: "Fix Anyway",
+      secondaryText: "Download Existing",
+      cancelText: "Cancel",
+      hideSecondary: false,
+      tone: "danger",
+    });
+    if (duplicateAction === "secondary") {
+      triggerBrowserDownload(ensureCloudBlobUrl(existingReady), existingReady.outputName);
+      return false;
+    }
+    if (duplicateAction !== "confirm") {
+      return false;
     }
   }
 
-  els.fileGroups.innerHTML = `
-    <section class="file-empty reveal in-view">
-      <h3>Cloud Preview Mode</h3>
-      <p>
-        This Vercel deployment is UI-only. Run this app on your Windows PC with
-        <code>npm run dev</code> to enable fixing, folder browse, and local file scanning.
-      </p>
-    </section>
-  `;
-  els.fileCount.textContent = "0 visible / 0 total";
-  setStatusText("Cloud preview mode on Vercel. Local Windows runtime is required for tools.");
+  item.status = "processing";
+  item.error = "";
+  renderCloudQueue();
+
+  try {
+    item.outputBlob = await decodeCloudItemToBlob(item);
+    if (item.blobUrl) {
+      URL.revokeObjectURL(item.blobUrl);
+      item.blobUrl = "";
+    }
+    item.status = "ready";
+    renderCloudQueue();
+
+    if (showSuccessModal) {
+      await handleCloudSuccessAction(item);
+    }
+    return true;
+  } catch (error) {
+    item.status = "error";
+    item.error = error.message;
+    renderCloudQueue();
+    showToast(`Fix failed for ${item.file.name}: ${error.message}`, "error", 5200);
+    return false;
+  }
+}
+
+async function fixSelectedCloudFiles() {
+  const ids = getCloudSelectedIds();
+  if (ids.length === 0) {
+    await alertDialog("No File Selected", "Select at least one uploaded file to fix.");
+    return;
+  }
+
+  const accepted = await confirmDialog(
+    "Fix Selected Files",
+    `Fix ${ids.length} selected cloud file(s) now?`,
+    { confirmText: "Fix Selected" }
+  );
+  if (!accepted) return;
+
+  let successCount = 0;
+  for (const id of ids) {
+    const ok = await fixCloudItemById(id, { showSuccessModal: false });
+    if (ok) successCount += 1;
+  }
+
+  showToast(`Cloud fix completed. Success: ${successCount}/${ids.length}.`, "success", 4200);
+
+  const readyItems = state.cloudQueue.filter((item) => item.status === "ready");
+  if (readyItems.length === 0) return;
+
+  const action = await openModal({
+    title: "Cloud Export Complete",
+    message: "Your selected files were fixed. Download all now or save the first file manually.",
+    confirmText: "Download All",
+    secondaryText: "Save First As",
+    cancelText: "Close",
+    hideSecondary: false,
+  });
+
+  if (action === "confirm") {
+    for (const item of readyItems) {
+      triggerBrowserDownload(ensureCloudBlobUrl(item), item.outputName);
+    }
+    return;
+  }
+  if (action === "secondary") {
+    try {
+      const first = readyItems[0];
+      const saved = await saveBlobWithPicker(first.outputBlob, first.outputName);
+      if (!saved) {
+        triggerBrowserDownload(ensureCloudBlobUrl(first), first.outputName);
+      }
+    } catch (error) {
+      if (error && error.name !== "AbortError") {
+        showToast(error.message || "Save As failed. Downloading first file.", "error", 5200);
+      }
+      triggerBrowserDownload(ensureCloudBlobUrl(readyItems[0]), readyItems[0].outputName);
+    }
+  }
+}
+
+function wireCloudActions() {
+  if (!els.cloudPickBtn) return;
+
+  els.cloudPickBtn.addEventListener("click", () => {
+    els.cloudFileInput?.click();
+  });
+
+  els.cloudFileInput?.addEventListener("change", (event) => {
+    queueCloudFiles(event.target.files);
+    event.target.value = "";
+  });
+
+  els.cloudClearBtn?.addEventListener("click", async () => {
+    if (state.cloudQueue.length === 0) return;
+    const accepted = await confirmDialog(
+      "Clear Cloud Queue",
+      "Remove all uploaded and fixed items from queue?",
+      { confirmText: "Clear Queue", tone: "danger" }
+    );
+    if (!accepted) return;
+    clearCloudObjectUrls();
+    state.cloudQueue = [];
+    renderCloudQueue();
+  });
+
+  els.cloudFixSelectedBtn?.addEventListener("click", async () => {
+    setBusy(els.cloudFixSelectedBtn, true);
+    try {
+      await fixSelectedCloudFiles();
+    } catch (error) {
+      showToast(error.message, "error", 5200);
+    } finally {
+      setBusy(els.cloudFixSelectedBtn, false);
+    }
+  });
+
+  els.cloudQueueBody?.addEventListener("change", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) return;
+    if (!target.classList.contains("cloud-check")) return;
+    const id = Number.parseInt(String(target.dataset.id || ""), 10);
+    const item = getCloudItemById(id);
+    if (!item) return;
+    item.selected = target.checked;
+  });
+
+  els.cloudQueueBody?.addEventListener("click", async (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLButtonElement)) return;
+    const id = Number.parseInt(String(target.dataset.id || ""), 10);
+    if (!Number.isFinite(id)) return;
+
+    if (target.classList.contains("cloud-fix-one")) {
+      setBusy(target, true);
+      try {
+        await fixCloudItemById(id);
+      } catch (error) {
+        showToast(error.message, "error", 5200);
+      } finally {
+        setBusy(target, false);
+      }
+      return;
+    }
+
+    if (target.classList.contains("cloud-download-one")) {
+      const item = getCloudItemById(id);
+      if (!item || item.status !== "ready") return;
+      triggerBrowserDownload(ensureCloudBlobUrl(item), item.outputName);
+    }
+  });
+}
+
+function enableCloudPreviewMode() {
+  state.ui.cloudPreview = true;
+  state.config = { ...CLIENT_DEFAULT_CONFIG };
+  els.workspaceGrid?.classList.add("hidden");
+  els.cloudStudio?.classList.remove("hidden");
+  document.body.classList.add("cloud-mode");
+  setStatusText("Cloud mode active: upload .key* files, fix in browser, and download instantly.");
+  renderCloudQueue();
+}
+
+async function isLocalRuntimeAvailable() {
+  try {
+    const response = await fetch("/api/status", {
+      method: "GET",
+      cache: "no-store",
+      headers: {
+        Accept: "application/json",
+      },
+    });
+    if (!response.ok) return false;
+
+    const type = String(response.headers.get("content-type") || "").toLowerCase();
+    if (!type.includes("application/json")) return false;
+
+    const payload = await response.json();
+    return Boolean(payload && payload.ok === true && payload.config);
+  } catch {
+    return false;
+  }
 }
 
 async function api(url, options = {}) {
   if (state.ui.cloudPreview) {
     throw new Error(
-      "Cloud preview mode: API is unavailable on Vercel. Run locally on Windows for full features."
+      "Local desktop API is disabled in cloud mode. Use the Global Cloud Fixer upload workflow."
     );
   }
   const response = await fetch(url, options);
@@ -723,7 +1159,7 @@ function getManualDestinationPayload() {
 }
 
 function getCheckedFilePaths() {
-  const checks = document.querySelectorAll(".file-check:checked");
+  const checks = document.querySelectorAll(".file-groups .file-check:checked:not(.cloud-check)");
   return [...checks].map((check) => decodeURIComponent(check.dataset.path));
 }
 
@@ -1075,7 +1511,9 @@ function wireEvents() {
   });
 
   els.selectAll.addEventListener("change", () => {
-    const checks = document.querySelectorAll(".file-check:not(:disabled)");
+    const checks = document.querySelectorAll(
+      ".file-groups .file-check:not(.cloud-check):not(:disabled)"
+    );
     checks.forEach((check) => {
       check.checked = els.selectAll.checked;
     });
@@ -1083,12 +1521,18 @@ function wireEvents() {
 }
 
 async function init() {
+  window.addEventListener("beforeunload", () => {
+    clearCloudObjectUrls();
+  });
+
   initializeTheme();
   wireModalEvents();
   wireEvents();
+  wireCloudActions();
   observeRevealNodes();
 
-  if (isCloudPreviewHost()) {
+  const runtimeAvailable = await isLocalRuntimeAvailable();
+  if (!runtimeAvailable || isCloudPreviewHost()) {
     enableCloudPreviewMode();
     return;
   }

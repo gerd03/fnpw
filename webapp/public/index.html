@@ -27,7 +27,7 @@
         </div>
       </header>
 
-      <section class="workspace-grid">
+      <section id="workspaceGrid" class="workspace-grid">
         <section class="control-card reveal">
           <div class="card-head">
             <h2>Core Settings</h2>
@@ -158,6 +158,54 @@
 
           <div id="fileGroups" class="file-groups" aria-live="polite"></div>
         </section>
+      </section>
+
+      <section id="cloudStudio" class="control-card reveal cloud-studio hidden">
+        <div class="card-head">
+          <h2>Global Cloud Fixer</h2>
+          <span id="cloudCount" class="badge-pill">0 file(s)</span>
+        </div>
+        <p class="status-label cloud-hint">
+          Upload encrypted FonePaw files (`.key*`) and fix them directly in browser. No local install required.
+        </p>
+
+        <input
+          id="cloudFileInput"
+          class="hidden"
+          type="file"
+          multiple
+          accept=".keymp4,.keymov,.keymkv,.keywmv,.keywebm,.keyf4v,.keympegts,.keyts,.keygif,.key"
+        />
+
+        <div class="action-row">
+          <button id="cloudPickBtn" type="button" class="btn primary">Upload Files</button>
+          <button id="cloudFixSelectedBtn" type="button" class="btn ghost">Fix Selected</button>
+          <button id="cloudClearBtn" type="button" class="btn ghost">Clear Queue</button>
+          <label class="switch">
+            <input id="cloudAutoDownload" type="checkbox" checked />
+            <span>Auto-download when fixed</span>
+          </label>
+        </div>
+
+        <div class="table-wrap cloud-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Select</th>
+                <th>Filename</th>
+                <th>Size</th>
+                <th>Output</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="cloudQueueBody">
+              <tr>
+                <td colspan="6" class="status-label">No uploaded files yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </section>
     </main>
 
