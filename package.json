@@ -1,0 +1,14 @@
+{
+  "name": "fonepaw-keymp4-webapp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local web app to fix FonePaw .keymp4 files and copy playable .mp4 files to chosen folders.",
+  "main": "webapp/server.js",
+  "scripts": {
+    "start": "node webapp/server.js",
+    "dev": "node webapp/server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

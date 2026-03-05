@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FONEPAW SCREEN RECORDER EXPORTS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Manrope:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body class="theme-dark">
+    <div class="ambient ambient-a"></div>
+    <div class="ambient ambient-b"></div>
+    <div class="ambient ambient-c"></div>
+
+    <main class="app-shell">
+      <header class="hero-shell reveal">
+        <div class="hero-simple">
+          <h1>FONEPAW SCREEN RECORDER EXPORTS</h1>
+          <button id="themeToggle" type="button" class="btn ghost compact">Switch Theme</button>
+        </div>
+      </header>
+
+      <section class="workspace-grid">
+        <section class="control-card reveal">
+          <div class="card-head">
+            <h2>Core Settings</h2>
+            <span id="settingsStatus" class="status-label"></span>
+          </div>
+
+          <div class="form-grid">
+            <label class="field field-span-2">
+              <span>Source Folder</span>
+              <div class="field-inline">
+                <input
+                  id="sourceDir"
+                  type="text"
+                  placeholder="C:\FonePaw Temp\FonePaw Screen Recorder\RecOut"
+                />
+                <button id="sourceBrowseBtn" type="button" class="btn ghost">Browse</button>
+              </div>
+            </label>
+
+            <div class="field field-span-2 source-tools">
+              <button id="discoverBtn" type="button" class="btn ghost">Discover Source Folders</button>
+              <select id="sourceSelect">
+                <option value="">Detected folders...</option>
+              </select>
+            </div>
+
+            <label class="field">
+              <span>Auto Destination Mode</span>
+              <select id="outputMode">
+                <option value="downloads">Downloads</option>
+                <option value="custom">Custom Folder</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>Output Format</span>
+              <select id="outputFormat">
+                <option value="mp4">MP4</option>
+                <option value="mov">MOV</option>
+                <option value="mkv">MKV</option>
+                <option value="wmv">WMV</option>
+                <option value="webm">WebM</option>
+                <option value="f4v">F4V</option>
+                <option value="mpegts">MPEG-TS</option>
+                <option value="gif">GIF</option>
+              </select>
+            </label>
+
+            <label class="field field-span-2">
+              <span>Auto Custom Output Folder</span>
+              <div class="field-inline">
+                <input id="outputDir" type="text" placeholder="D:\Videos\Processed" />
+                <button id="outputBrowseBtn" type="button" class="btn ghost">Browse</button>
+              </div>
+            </label>
+
+            <label class="field">
+              <span>Scan Interval (seconds)</span>
+              <input id="pollSeconds" type="number" min="2" max="300" step="1" />
+            </label>
+
+            <label class="switch field-switch">
+              <input id="autoStartWatcher" type="checkbox" />
+              <span>Auto-start watcher when web app starts</span>
+            </label>
+          </div>
+
+          <div class="card-actions">
+            <button id="saveSettingsBtn" type="button" class="btn primary">Save Settings</button>
+          </div>
+        </section>
+
+        <section class="control-card reveal explorer-card">
+          <div class="card-head">
+            <h2>File Explorer</h2>
+            <div class="head-meta">
+              <span id="fileCount" class="badge-pill">0 visible / 0 total</span>
+              <span id="fileLoading" class="loading-pill hidden"><i></i>Loading files</span>
+            </div>
+          </div>
+
+          <div class="toolbar-grid">
+            <label class="field toolbar-span-2">
+              <span>Search Files</span>
+              <input id="fileSearch" type="text" placeholder="Search by filename..." />
+            </label>
+
+            <label class="field">
+              <span>Destination Mode</span>
+              <select id="manualDestinationMode">
+                <option value="downloads">Downloads</option>
+                <option value="custom">Custom Folder</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>Export Format</span>
+              <select id="manualOutputFormat">
+                <option value="core">Use Core Setting</option>
+                <option value="mp4">MP4</option>
+                <option value="mov">MOV</option>
+                <option value="mkv">MKV</option>
+                <option value="wmv">WMV</option>
+                <option value="webm">WebM</option>
+                <option value="f4v">F4V</option>
+                <option value="mpegts">MPEG-TS</option>
+                <option value="gif">GIF</option>
+              </select>
+            </label>
+
+            <label class="field toolbar-span-2">
+              <span>Custom Destination Folder</span>
+              <div class="field-inline">
+                <input id="manualDestinationDir" type="text" placeholder="D:\Share\Output" />
+                <button id="manualDestinationBrowseBtn" type="button" class="btn ghost">Browse</button>
+              </div>
+            </label>
+          </div>
+
+          <div class="action-row">
+            <button id="refreshFilesBtn" type="button" class="btn ghost">Refresh Files</button>
+            <button id="fixSelectedBtn" type="button" class="btn primary">Fix Selected Files</button>
+            <label class="switch">
+              <input id="selectAll" type="checkbox" />
+              <span>Select all currently shown</span>
+            </label>
+          </div>
+
+          <div id="fileGroups" class="file-groups" aria-live="polite"></div>
+        </section>
+      </section>
+    </main>
+
+    <div id="toastStack" class="toast-stack"></div>
+
+    <div id="modalBackdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-hidden="true">
+      <div class="modal-card" role="document">
+        <h3 id="modalTitle">Confirm Action</h3>
+        <p id="modalMessage" class="status-label"></p>
+        <div class="modal-actions">
+          <button id="modalCancelBtn" type="button" class="btn ghost">Cancel</button>
+          <button id="modalConfirmBtn" type="button" class="btn primary">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
