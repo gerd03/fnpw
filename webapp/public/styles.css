@@ -198,6 +198,21 @@ body.modal-open {
   gap: 16px;
 }
 
+.brand-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.hero-logo {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  object-fit: cover;
+  border: 1px solid color-mix(in srgb, var(--line) 90%, transparent);
+  box-shadow: 0 10px 22px color-mix(in srgb, #000 24%, transparent);
+}
+
 .hero-actions {
   display: flex;
   align-items: center;
@@ -228,6 +243,28 @@ body.modal-open {
 
 .mode-hint {
   margin: 10px 0 0;
+}
+
+.runtime-quickstart {
+  border: 1px solid color-mix(in srgb, var(--line) 86%, transparent);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 16px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+}
+
+.runtime-quickstart h3 {
+  margin: 0;
+  font-family: "Sora", "Segoe UI", sans-serif;
+  font-size: 17px;
+}
+
+.runtime-quickstart .status-label {
+  margin-top: 6px;
+}
+
+.quickstart-actions {
+  margin-top: 10px;
 }
 
 .hero-simple h1 {
@@ -1112,6 +1149,10 @@ td strong {
     justify-content: flex-start;
   }
 
+  .brand-wrap {
+    width: 100%;
+  }
+
   .card-head {
     flex-direction: column;
     align-items: flex-start;
@@ -1143,6 +1184,15 @@ td strong {
   .mode-btn {
     flex: 1;
     min-width: 0;
+  }
+
+  .brand-wrap {
+    align-items: flex-start;
+  }
+
+  .hero-logo {
+    width: 48px;
+    height: 48px;
   }
 
   .field-inline {

@@ -1,4 +1,8 @@
 const GROUP_PAGE_SIZE = 14;
+const RUNTIME_LAUNCHER_PS1_URL =
+  "https://raw.githubusercontent.com/gerd03/fnpw/main/webapp/public/desktop/Start-FonePawDesktopRuntime.ps1";
+const RUNTIME_ONE_LINER = `powershell -NoProfile -ExecutionPolicy Bypass -Command "iwr -UseBasicParsing '${RUNTIME_LAUNCHER_PS1_URL}' | iex"`;
+const DESKTOP_API_BASE_CANDIDATES = ["", "http://127.0.0.1:3210", "http://localhost:3210"];
 const CLIENT_DEFAULT_CONFIG = {
   sourceDir: "",
   outputMode: "downloads",
@@ -23,6 +27,7 @@ const state = {
     loadingFiles: false,
     cloudPreview: false,
     localRuntimeAvailable: false,
+    localApiBase: "",
     currentMode: "desktop",
     groupRenderCount: {
       today: GROUP_PAGE_SIZE,
@@ -38,6 +43,11 @@ const els = {
   modeDesktopBtn: document.getElementById("modeDesktopBtn"),
   modeCloudBtn: document.getElementById("modeCloudBtn"),
   modeHint: document.getElementById("modeHint"),
+  runtimeDownloadBtn: document.getElementById("runtimeDownloadBtn"),
+  runtimeCopyCmdBtn: document.getElementById("runtimeCopyCmdBtn"),
+  runtimeConnectBtn: document.getElementById("runtimeConnectBtn"),
+  runtimeOpenLocalBtn: document.getElementById("runtimeOpenLocalBtn"),
+  runtimeHint: document.getElementById("runtimeHint"),
   workspaceGrid: document.getElementById("workspaceGrid"),
   cloudStudio: document.getElementById("cloudStudio"),
   sourceDir: document.getElementById("sourceDir"),
@@ -255,6 +265,66 @@ function setModeHint(text) {
   }
 }
 
+function setRuntimeHint(text, isError = false) {
+  if (!els.runtimeHint) return;
+  els.runtimeHint.textContent = text;
+  els.runtimeHint.style.color = isError ? "var(--danger-ink)" : "var(--muted)";
+}
+
+function normalizeApiBase(baseUrl) {
+  const raw = String(baseUrl || "").trim();
+  if (!raw) return "";
+  return raw.replace(/\/+$/, "");
+}
+
+function buildApiUrl(pathname) {
+  const path = String(pathname || "");
+  const base = normalizeApiBase(state.ui.localApiBase);
+  return base ? `${base}${path}` : path;
+}
+
+async function probeDesktopRuntime(baseUrl) {
+  const apiBase = normalizeApiBase(baseUrl);
+  const url = apiBase ? `${apiBase}/api/status` : "/api/status";
+  const response = await fetch(url, {
+    method: "GET",
+    cache: "no-store",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    return { ok: false, apiBase, reason: `HTTP ${response.status}` };
+  }
+
+  const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+  if (!contentType.includes("application/json")) {
+    return { ok: false, apiBase, reason: "Non-JSON response" };
+  }
+
+  const payload = await response.json();
+  if (!payload || payload.ok !== true || !payload.config) {
+    return { ok: false, apiBase, reason: "Invalid runtime payload" };
+  }
+
+  return { ok: true, apiBase, payload };
+}
+
+async function detectDesktopRuntime() {
+  for (const candidate of DESKTOP_API_BASE_CANDIDATES) {
+    try {
+      const result = await probeDesktopRuntime(candidate);
+      if (result.ok) {
+        return result;
+      }
+    } catch {
+      // Continue probing other candidates.
+    }
+  }
+  return { ok: false, apiBase: "", payload: null };
+}
+
 function setAppMode(mode) {
   const nextMode = mode === "cloud" ? "cloud" : "desktop";
   state.ui.currentMode = nextMode;
@@ -267,16 +337,36 @@ function setAppMode(mode) {
   if (desktop) {
     if (state.ui.localRuntimeAvailable) {
       setModeHint("Desktop mode active: local folders, auto watch, and full device tools.");
+      setRuntimeHint(
+        state.ui.localApiBase
+          ? `Runtime connected at ${state.ui.localApiBase}.`
+          : "Runtime connected on current host.",
+        false
+      );
     } else {
       setModeHint(
         "Desktop mode requires local runtime. Switch to Cloud Mode to upload and fix files globally."
+      );
+      setRuntimeHint(
+        "Run launcher first, then click Connect Runtime.",
+        false
       );
     }
   } else {
     if (state.ui.localRuntimeAvailable) {
       setModeHint("Cloud mode active: optional browser upload fixer and instant downloads.");
+      setRuntimeHint(
+        state.ui.localApiBase
+          ? `Desktop runtime is still connected at ${state.ui.localApiBase}.`
+          : "Desktop runtime is connected.",
+        false
+      );
     } else {
       setModeHint("Cloud mode active: upload encrypted files and download fixed exports.");
+      setRuntimeHint(
+        "You can still enable desktop runtime anytime using Quick Start.",
+        false
+      );
     }
   }
 
@@ -729,6 +819,7 @@ function wireCloudActions() {
 function enableCloudPreviewMode() {
   state.ui.cloudPreview = true;
   state.ui.localRuntimeAvailable = false;
+  state.ui.localApiBase = "";
   state.config = { ...CLIENT_DEFAULT_CONFIG };
   applyConfigToForm({ force: true });
   setDesktopControlsDisabled(true);
@@ -742,30 +833,13 @@ function enableCloudPreviewMode() {
     </section>
   `;
   els.fileCount.textContent = "0 visible / 0 total";
-  setAppMode("cloud");
-  setStatusText("Cloud mode active: upload .key* files, fix in browser, and download instantly.");
+  setAppMode("desktop");
+  setStatusText("Desktop runtime unavailable. Use Quick Start, then click Connect Runtime.");
+  setRuntimeHint(
+    "Step 1: Download launcher. Step 2: run it once. Step 3: click Connect Runtime.",
+    false
+  );
   renderCloudQueue();
-}
-
-async function isLocalRuntimeAvailable() {
-  try {
-    const response = await fetch("/api/status", {
-      method: "GET",
-      cache: "no-store",
-      headers: {
-        Accept: "application/json",
-      },
-    });
-    if (!response.ok) return false;
-
-    const type = String(response.headers.get("content-type") || "").toLowerCase();
-    if (!type.includes("application/json")) return false;
-
-    const payload = await response.json();
-    return Boolean(payload && payload.ok === true && payload.config);
-  } catch {
-    return false;
-  }
 }
 
 async function api(url, options = {}) {
@@ -774,12 +848,78 @@ async function api(url, options = {}) {
       "Desktop runtime is unavailable. Use Cloud Mode for upload-and-fix workflow."
     );
   }
-  const response = await fetch(url, options);
+  const response = await fetch(buildApiUrl(url), options);
   const json = await response.json();
   if (!response.ok || json.ok === false) {
     throw new Error(json.error || `Request failed: ${response.status}`);
   }
   return json;
+}
+
+async function copyToClipboard(text) {
+  const value = String(text || "");
+  if (!value) return false;
+
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(value);
+    return true;
+  }
+
+  const temp = document.createElement("textarea");
+  temp.value = value;
+  temp.setAttribute("readonly", "true");
+  temp.style.position = "fixed";
+  temp.style.left = "-9999px";
+  document.body.appendChild(temp);
+  temp.select();
+  const ok = document.execCommand("copy");
+  temp.remove();
+  return ok;
+}
+
+async function connectDesktopRuntime(options = {}) {
+  const silent = Boolean(options.silent);
+  if (!silent) {
+    setRuntimeHint("Checking desktop runtime...", false);
+  }
+
+  const probe = await detectDesktopRuntime();
+  if (!probe.ok) {
+    enableCloudPreviewMode();
+    if (!silent) {
+      setRuntimeHint(
+        "Runtime not detected. Run the launcher, wait for install, then click Connect Runtime again.",
+        true
+      );
+      showToast("Desktop runtime is not running yet.", "error", 4800);
+    }
+    return false;
+  }
+
+  state.ui.localRuntimeAvailable = true;
+  state.ui.localApiBase = probe.apiBase;
+  state.ui.cloudPreview = false;
+  setDesktopControlsDisabled(false);
+  setAppMode("desktop");
+  setRuntimeHint(
+    probe.apiBase
+      ? `Connected to local runtime at ${probe.apiBase}.`
+      : "Connected to desktop runtime.",
+    false
+  );
+
+  setStatusText("Desktop runtime connected.");
+  await Promise.all([
+    loadStatus({ syncForm: true, forceForm: true }),
+    discoverSources(),
+    loadFiles(),
+  ]);
+
+  if (!silent) {
+    showToast("Desktop runtime connected successfully.", "success");
+  }
+
+  return true;
 }
 
 function getStoredTheme() {
@@ -1474,6 +1614,36 @@ function wireEvents() {
     setAppMode("cloud");
   });
 
+  els.runtimeCopyCmdBtn?.addEventListener("click", async () => {
+    try {
+      const copied = await copyToClipboard(RUNTIME_ONE_LINER);
+      if (!copied) {
+        throw new Error("Clipboard access failed.");
+      }
+      setRuntimeHint("PowerShell command copied. Paste in PowerShell and run.", false);
+      showToast("Runtime command copied to clipboard.", "success");
+    } catch (error) {
+      setRuntimeHint("Copy failed. Use the Download Launcher button instead.", true);
+      showToast(error.message || "Unable to copy command.", "error", 4800);
+    }
+  });
+
+  els.runtimeConnectBtn?.addEventListener("click", async () => {
+    setBusy(els.runtimeConnectBtn, true);
+    try {
+      await connectDesktopRuntime({ silent: false });
+    } catch (error) {
+      setRuntimeHint(error.message, true);
+      showToast(error.message, "error", 5200);
+    } finally {
+      setBusy(els.runtimeConnectBtn, false);
+    }
+  });
+
+  els.runtimeOpenLocalBtn?.addEventListener("click", () => {
+    window.open("http://127.0.0.1:3210", "_blank", "noopener,noreferrer");
+  });
+
   const settingsInputs = [
     els.sourceDir,
     els.outputMode,
@@ -1624,30 +1794,18 @@ async function init() {
   wireCloudActions();
   observeRevealNodes();
 
-  const runtimeAvailable = await isLocalRuntimeAvailable();
-  state.ui.localRuntimeAvailable = runtimeAvailable;
-
-  if (!runtimeAvailable) {
-    enableCloudPreviewMode();
-    return;
-  }
-
-  state.ui.cloudPreview = false;
-  setDesktopControlsDisabled(false);
-  setAppMode("desktop");
-
   try {
-    await Promise.all([
-      loadStatus({ syncForm: true, forceForm: true }),
-      discoverSources(),
-      loadFiles(),
-    ]);
+    const connected = await connectDesktopRuntime({ silent: true });
+    if (!connected) {
+      return;
+    }
   } catch (error) {
     setStatusText(error.message, true);
     showToast(error.message, "error", 5200);
   }
 
   window.setInterval(async () => {
+    if (!state.ui.localRuntimeAvailable) return;
     try {
       await loadStatus();
     } catch {

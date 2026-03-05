@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Manrope:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" href="/FONEPAW.png" />
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body class="theme-dark">
@@ -22,7 +22,10 @@
     <main class="app-shell">
       <header class="hero-shell reveal">
         <div class="hero-simple">
-          <h1>FONEPAW SCREEN RECORDER EXPORTS</h1>
+          <div class="brand-wrap">
+            <img src="/FONEPAW.png" alt="FonePaw" class="hero-logo" />
+            <h1>FONEPAW SCREEN RECORDER EXPORTS</h1>
+          </div>
           <div class="hero-actions">
             <div class="mode-switch" role="tablist" aria-label="App mode">
               <button id="modeDesktopBtn" type="button" class="btn ghost compact mode-btn active">
@@ -44,6 +47,26 @@
             <h2>Core Settings</h2>
             <span id="settingsStatus" class="status-label"></span>
           </div>
+
+          <section class="runtime-quickstart">
+            <h3>Desktop Runtime Quick Start</h3>
+            <p class="status-label">
+              Full local file detection needs a local runtime. Use one of these buttons first.
+            </p>
+            <div class="action-row quickstart-actions">
+              <a
+                id="runtimeDownloadBtn"
+                class="btn primary"
+                href="/desktop/Start-FonePawDesktopRuntime.cmd"
+                download="Start-FonePawDesktopRuntime.cmd"
+                >Download Launcher</a
+              >
+              <button id="runtimeCopyCmdBtn" type="button" class="btn ghost">Copy PowerShell Command</button>
+              <button id="runtimeConnectBtn" type="button" class="btn ghost">Connect Runtime</button>
+              <button id="runtimeOpenLocalBtn" type="button" class="btn ghost">Open Local App</button>
+            </div>
+            <p id="runtimeHint" class="status-label"></p>
+          </section>
 
           <div class="form-grid">
             <label class="field field-span-2">
