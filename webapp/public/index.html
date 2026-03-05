@@ -23,8 +23,19 @@
       <header class="hero-shell reveal">
         <div class="hero-simple">
           <h1>FONEPAW SCREEN RECORDER EXPORTS</h1>
-          <button id="themeToggle" type="button" class="btn ghost compact">Switch Theme</button>
+          <div class="hero-actions">
+            <div class="mode-switch" role="tablist" aria-label="App mode">
+              <button id="modeDesktopBtn" type="button" class="btn ghost compact mode-btn active">
+                Desktop Mode
+              </button>
+              <button id="modeCloudBtn" type="button" class="btn ghost compact mode-btn">
+                Cloud Mode
+              </button>
+            </div>
+            <button id="themeToggle" type="button" class="btn ghost compact">Switch Theme</button>
+          </div>
         </div>
+        <p id="modeHint" class="status-label mode-hint"></p>
       </header>
 
       <section id="workspaceGrid" class="workspace-grid">

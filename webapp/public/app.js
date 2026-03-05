@@ -1,6 +1,4 @@
 const GROUP_PAGE_SIZE = 14;
-const CLOUD_PREVIEW_HOST_SUFFIX = ".vercel.app";
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 const CLIENT_DEFAULT_CONFIG = {
   sourceDir: "",
   outputMode: "downloads",
@@ -24,6 +22,8 @@ const state = {
     modalResolver: null,
     loadingFiles: false,
     cloudPreview: false,
+    localRuntimeAvailable: false,
+    currentMode: "desktop",
     groupRenderCount: {
       today: GROUP_PAGE_SIZE,
       yesterday: GROUP_PAGE_SIZE,
@@ -35,6 +35,9 @@ const state = {
 
 const els = {
   themeToggle: document.getElementById("themeToggle"),
+  modeDesktopBtn: document.getElementById("modeDesktopBtn"),
+  modeCloudBtn: document.getElementById("modeCloudBtn"),
+  modeHint: document.getElementById("modeHint"),
   workspaceGrid: document.getElementById("workspaceGrid"),
   cloudStudio: document.getElementById("cloudStudio"),
   sourceDir: document.getElementById("sourceDir"),
@@ -202,11 +205,82 @@ function setFilesLoading(loading) {
   }
 }
 
-function isCloudPreviewHost() {
-  const host = String(window.location.hostname || "").toLowerCase();
-  if (!host) return false;
-  if (LOCAL_HOSTS.has(host)) return false;
-  return host.endsWith(CLOUD_PREVIEW_HOST_SUFFIX);
+function getDesktopControls() {
+  return [
+    els.sourceDir,
+    els.sourceBrowseBtn,
+    els.discoverBtn,
+    els.sourceSelect,
+    els.outputMode,
+    els.outputFormat,
+    els.outputDir,
+    els.outputBrowseBtn,
+    els.pollSeconds,
+    els.autoStartWatcher,
+    els.saveSettingsBtn,
+    els.manualDestinationMode,
+    els.manualOutputFormat,
+    els.manualDestinationDir,
+    els.manualDestinationBrowseBtn,
+    els.refreshFilesBtn,
+    els.fixSelectedBtn,
+    els.selectAll,
+    els.fileSearch,
+  ];
+}
+
+function setDesktopControlsDisabled(disabled) {
+  for (const control of getDesktopControls()) {
+    if (control) {
+      control.disabled = Boolean(disabled);
+    }
+  }
+}
+
+function updateModeButtons() {
+  const desktop = state.ui.currentMode === "desktop";
+  els.modeDesktopBtn?.classList.toggle("active", desktop);
+  els.modeCloudBtn?.classList.toggle("active", !desktop);
+  if (els.modeDesktopBtn) {
+    els.modeDesktopBtn.setAttribute("aria-pressed", desktop ? "true" : "false");
+  }
+  if (els.modeCloudBtn) {
+    els.modeCloudBtn.setAttribute("aria-pressed", desktop ? "false" : "true");
+  }
+}
+
+function setModeHint(text) {
+  if (els.modeHint) {
+    els.modeHint.textContent = text;
+  }
+}
+
+function setAppMode(mode) {
+  const nextMode = mode === "cloud" ? "cloud" : "desktop";
+  state.ui.currentMode = nextMode;
+  const desktop = nextMode === "desktop";
+
+  els.workspaceGrid?.classList.toggle("hidden", !desktop);
+  els.cloudStudio?.classList.toggle("hidden", desktop);
+  document.body.classList.toggle("cloud-mode", !desktop);
+
+  if (desktop) {
+    if (state.ui.localRuntimeAvailable) {
+      setModeHint("Desktop mode active: local folders, auto watch, and full device tools.");
+    } else {
+      setModeHint(
+        "Desktop mode requires local runtime. Switch to Cloud Mode to upload and fix files globally."
+      );
+    }
+  } else {
+    if (state.ui.localRuntimeAvailable) {
+      setModeHint("Cloud mode active: optional browser upload fixer and instant downloads.");
+    } else {
+      setModeHint("Cloud mode active: upload encrypted files and download fixed exports.");
+    }
+  }
+
+  updateModeButtons();
 }
 
 function encryptedOutputExtensionForFileName(fileName) {
@@ -654,10 +728,21 @@ function wireCloudActions() {
 
 function enableCloudPreviewMode() {
   state.ui.cloudPreview = true;
+  state.ui.localRuntimeAvailable = false;
   state.config = { ...CLIENT_DEFAULT_CONFIG };
-  els.workspaceGrid?.classList.add("hidden");
-  els.cloudStudio?.classList.remove("hidden");
-  document.body.classList.add("cloud-mode");
+  applyConfigToForm({ force: true });
+  setDesktopControlsDisabled(true);
+  state.files = [];
+  state.grouped = { today: [], yesterday: [], earlier: [] };
+  renderGroups();
+  els.fileGroups.innerHTML = `
+    <section class="file-empty reveal in-view">
+      <h3>Desktop Runtime Unavailable</h3>
+      <p>Use Cloud Mode for global browser-based fixing, or run local runtime for full desktop automation.</p>
+    </section>
+  `;
+  els.fileCount.textContent = "0 visible / 0 total";
+  setAppMode("cloud");
   setStatusText("Cloud mode active: upload .key* files, fix in browser, and download instantly.");
   renderCloudQueue();
 }
@@ -684,9 +769,9 @@ async function isLocalRuntimeAvailable() {
 }
 
 async function api(url, options = {}) {
-  if (state.ui.cloudPreview) {
+  if (!state.ui.localRuntimeAvailable) {
     throw new Error(
-      "Local desktop API is disabled in cloud mode. Use the Global Cloud Fixer upload workflow."
+      "Desktop runtime is unavailable. Use Cloud Mode for upload-and-fix workflow."
     );
   }
   const response = await fetch(url, options);
@@ -1381,6 +1466,14 @@ function wireEvents() {
     applyTheme(state.ui.theme === "dark" ? "light" : "dark");
   });
 
+  els.modeDesktopBtn?.addEventListener("click", () => {
+    setAppMode("desktop");
+  });
+
+  els.modeCloudBtn?.addEventListener("click", () => {
+    setAppMode("cloud");
+  });
+
   const settingsInputs = [
     els.sourceDir,
     els.outputMode,
@@ -1532,10 +1625,16 @@ async function init() {
   observeRevealNodes();
 
   const runtimeAvailable = await isLocalRuntimeAvailable();
-  if (!runtimeAvailable || isCloudPreviewHost()) {
+  state.ui.localRuntimeAvailable = runtimeAvailable;
+
+  if (!runtimeAvailable) {
     enableCloudPreviewMode();
     return;
   }
+
+  state.ui.cloudPreview = false;
+  setDesktopControlsDisabled(false);
+  setAppMode("desktop");
 
   try {
     await Promise.all([
